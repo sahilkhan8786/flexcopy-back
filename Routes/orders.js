@@ -86,6 +86,10 @@ async function fetchOrderData(date1, date2, token) {
 }
 
 
+
+
+
+
 // Function to fetch additional data for each item from the second API endpoint
 async function fetchItemData(itemId, token, date1, date2) {
   const url = `https://api.mercadolibre.com/items/${itemId}`;
@@ -246,7 +250,7 @@ router.post("/tryorders", async (req, res) => {
           startDate.setDate(startDate.getDate() - 7); // 7 days ago
 
           const accessToken = data.data.access_token; // Replace with your access token
-          console.log(accessToken);
+          // console.log(accessToken);
           const orders = await fetchOrders(accessToken, startDate, endDate);
 
           // Send all fetched orders in the response
@@ -257,6 +261,72 @@ router.post("/tryorders", async (req, res) => {
       });
   } catch (err) {
     res.json("Something went wrong!");
+  }
+});
+
+
+// GET ONLY COMPLETED OR FILLED ORDERS
+async function fetchFilledOrder(date1, date2, token) {
+  let records = [];
+  let ids2 = [];
+
+  try {
+    const initialResponse = await axios.get(
+      `https://api.mercadolibre.com/orders/search?seller=51940259&order.status=paid&order.date_created.from=${date2}T00:00:00.000-00:00&order.date_created.to=${date1}T00:00:00.000-00:00&sort=date_desc&search_type=scan`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    ids2.push(initialResponse.data.paging.scroll_id);
+    const total = Math.ceil(initialResponse.data.paging.total / 51);
+
+    for (let index = 0; index < total; index++) {
+      const url = `https://api.mercadolibre.com/orders/search?seller=51940259&order.status=paid&order.date_created.from=${date2}T00:00:00.000-00:00&order.date_created.to=${date1}T00:00:00.000-00:00&sort=date_desc&search_type=scan&scroll_id=${ids2[index]}`;
+
+      try {
+        const response = await axios.get(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        ids2.push(response.data.paging.scroll_id);
+
+        // Filter for fulfilled or full orders
+        const fulfilledOrders = response.data.results.filter(order =>
+          order.shipping.status === 'shipped' || order.shipping.status === 'delivered'
+        );
+        records.push(...fulfilledOrders);
+      } catch (error) {
+        console.error('Error fetching orders:', error);
+        throw error;
+      }
+    }
+
+    // Remove duplicates based on a unique identifier (e.g., order ID)
+    const uniqueRecords = Array.from(new Set(records.map(a => a.id))).map(id => {
+      return records.find(a => a.id === id);
+    });
+
+    return uniqueRecords;
+  } catch (error) {
+    console.error('Error fetching initial orders:', error);
+    throw error;
+  }
+}
+
+// Express route to get completed or filled orders
+router.get('/getFilledOrder', async (req, res) => {
+  const { date1, date2 } = req.query; // Assuming date1 and date2 are passed as query params
+  const token = req.headers.authorization.split(' ')[1]; // Assuming the token is passed in the Authorization header
+
+  try {
+    const orders = await fetchFilledOrder(date1, date2, token);
+    res.status(200).json({ success: true, orders });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to fetch orders', error: error.message });
   }
 });
 
