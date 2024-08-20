@@ -7,6 +7,7 @@ const router = express.Router();
 let ids2 = [];
 import { fileURLToPath } from 'url';
 
+
 // Get the current file's directory
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -98,6 +99,7 @@ router.post("/getitems", async (req, res) => {
         uniqueOrders[key] = { id, sku, title: itemName, quantity };
       }
     }
+
 
     const processedData = [];
     for (const order of Object.values(uniqueOrders)) {
@@ -268,3 +270,7 @@ router.get('/getFilledOrder', async (req, res) => {
 });
 
 export default router;
+
+
+
+
